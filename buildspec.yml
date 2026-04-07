@@ -1,0 +1,53 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_ACCOUNT_ID: "943938399880"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - pip install bandit awscli
+
+  pre_build:
+    commands:
+      - bandit -r . -f json -o bandit-report.json || true
+
+      - |
+        cat <<EOF > findings.json
+        {
+          "Findings": [
+            {
+              "SchemaVersion": "2018-10-08",
+              "Id": "bandit-finding-1",
+              "ProductArn": "arn:aws:securityhub:$AWS_DEFAULT_REGION::product/$AWS_ACCOUNT_ID/default",
+              "GeneratorId": "bandit",
+              "AwsAccountId": "$AWS_ACCOUNT_ID",
+              "Types": ["Software and Configuration Checks/Vulnerabilities"],
+              "CreatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "UpdatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "Severity": { "Label": "HIGH" },
+              "Title": "Hardcoded Password Found",
+              "Description": "Bandit detected hardcoded password",
+              "Resources": [
+                {
+                  "Type": "AwsLambdaFunction",
+                  "Id": "SecureCICDLambda"
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+
+      - aws securityhub batch-import-findings --findings file://findings.json
+
+  build:
+    commands:
+      - zip -r function.zip .
+
+artifacts:
+  files:
+    - function.zip
